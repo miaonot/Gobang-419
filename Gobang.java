@@ -29,6 +29,9 @@ public class Gobang {
 class Window {
 	//	登录界面初版
 	class LoginWindow extends JFrame {
+		JButton button1 = new JButton("线上");
+		JButton button2 = new JButton("线下");
+		
 		public LoginWindow() {
 			 super("欢迎使用五子棋程序");
 
@@ -37,7 +40,7 @@ class Window {
 			setSize(300, 100);
 			setResizable(false);
 
-			JButton button1 = new JButton("线上");
+			
 			button1.addActionListener(new ActionListener() {
 				public void actionPerformed (ActionEvent e) {
 					Gobang.setIsP2p(true);
@@ -45,7 +48,7 @@ class Window {
 				}
 			});
 
-			JButton button2 = new JButton("线下");
+			
 			button2.addActionListener(new ActionListener() {
 				public void actionPerformed (ActionEvent e) {
 					Gobang.setIsP2p(true);
@@ -63,6 +66,10 @@ class Window {
 
 	//	收集连接服务器所需信息的窗口
 	class ConnectWindow extends JFrame {
+		final JTextField ip = new JTextField("IP",20);
+		final JTextField spot = new JTextField("spot",8);
+		JButton button = new JButton("确定");
+		
 		public ConnectWindow() {
 			super("连接服务器");
 
@@ -71,10 +78,6 @@ class Window {
 			setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
 			setResizable(false);
 
-			final JTextField ip = new JTextField("IP",20);
-			final JTextField spot = new JTextField("spot",8);
-
-			JButton button = new JButton("确定");
 			button.addActionListener(new ActionListener() {
 				public void actionPerformed(ActionEvent e) {
 					int i = Integer.parseInt(spot.getText());
@@ -95,74 +98,72 @@ class Window {
 
 	//	主界面
 	class MainWindow extends JFrame{
-		final  Yuan [][] button = new Yuan[19][19];
+		Yuan [][] button = new Yuan[19][19];
+		panel panel1 = new panel();
+		JPanel panel2 = new JPanel(new GridLayout(2,1));
+		JButton button1 = new JButton("悔棋");
+		JButton button2 = new JButton("认输");
+		
 		public MainWindow() {
 			super ("五子棋");
-
-
-
+			
 			setSize(760,630);
 			setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 			setResizable(false);
 			setLayout(null);
 
-
-
-			panel panel1 = new panel();
 			panel1.setLayout(new GridLayout(19,19,15,15));
 			panel1.setBounds(0,0,610,600);
-
             panel1.setOpaque(false);
-			JPanel panel2 = new JPanel(new GridLayout(2,1));
+            
 			panel2.setBounds(610,0,150,600);
-
-
-
-			JButton button1 = new JButton("悔棋");
+			
 			button1.addActionListener(new ActionListener() {
 				public void actionPerformed(ActionEvent e) {
 					game.withdraw();
-
+					withdraw();
 				}
 			});
 			button1.setEnabled(true);
-			JButton button2 = new JButton("认输");
+			
 			button2.addActionListener(new ActionListener() {
 					public void actionPerformed(ActionEvent e) {
 						game.giveUp();
+						lock();
 						mainToNewGame();
 					}
 				});
 
-
-
 			for (int i = 0; i < 19; i ++) {
 				for (int j = 0; j < 19; j ++) {
-
 					button[i][j] = new Yuan();
 					button[i][j].yuan("",null);
 
 					panel1.add(button[i][j]);
+					
 					button[i][j].addActionListener(new ActionListener() {
 						public void actionPerformed(ActionEvent e) {
 							for (int x = 0; x < 19; x ++) {
 								for (int y = 0; y < 19; y ++) {
 									if (e.getSource() == button[x][y]) {
 										if (game.nowCheese == "X") {
-											button[x][y].yuan("",Color.white);
-										} else {
 											button[x][y].yuan("",Color.black);
+										} else {
+											button[x][y].yuan("",Color.white);
 										}
+										
 										button[x][y].setOpaque(true);
-
 										button[x][y].setEnabled(false);
-										game.turnEnd();
+										
+										game.putCheese(x, y);
 										boolean	isWin = game.judge();
 										if(isWin == true) {
 											game.afterJudge();
-											game.init();
-											init();
+											lock();
+											mainToNewGame();
 										}
+										game.turnEnd();
+										
 									}
 								}
 							}
@@ -183,14 +184,36 @@ class Window {
 		public void init() {
 			for (int x = 0; x < 19; x ++) {
 				for (int y = 0; y < 19; y ++) {
-					
+					button[x][y].setOpaque(false);
+					button[x][y].setEnabled(true);
 				}
 			}
 		}
+		
+		//悔棋
+		public void withdraw() {
+			button[game.lastX][game.lastY].setOpaque(false);
+			button[game.lastX][game.lastY].setEnabled(true);
+			button[game.lasterX][game.lasterY].setOpaque(false);
+			button[game.lasterX][game.lasterY].setEnabled(true);
+		}
+		
+		//锁定棋盘
+		public void lock() {
+			for (int x = 0; x < 19; x ++) {
+				for (int y = 0; y < 19; y ++) {
+					button[x][y].setEnabled(false);
+				}
+			}
+		}
+		
 	}
 	
 	//询问是否开始新游戏的窗口
 	class NewGameWindow extends JFrame{
+		JButton button1 = new JButton("是");
+		JButton button2 = new JButton("否");
+		
 		public NewGameWindow() {
 			super("新游戏");
 
@@ -199,21 +222,22 @@ class Window {
 			setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 			setResizable(false);
 
-			JButton button1 = new JButton("是");
+			
 			button1.addActionListener(new ActionListener() {
 				public void actionPerformed(ActionEvent e) {
 					setVisible(false);
 					game.init();
+					mw.init();
 				}
 			});
-			JButton button2 = new JButton("否");
+			
 			button2.addActionListener(new ActionListener() {
 				public void actionPerformed(ActionEvent e) {
-					
+					System.exit(0);
 				}
 			});
 
-			add(new JLabel("是否开始新的游戏"));
+			add(new JLabel("胜负已分。是否开始新的游戏"));
 			add(button1);
 			add(button2);
 		}
@@ -223,6 +247,7 @@ class Window {
 	class Yuan extends JButton{
 		Shape shape;
 		Color bg = SystemColor.control;
+		
 		public void yuan(String label,Color bg) {
 	 	// 调用父类构造方法
 		  	if (bg != null) {
@@ -354,7 +379,6 @@ class Game {
 
 	//	初始化游戏
 	public void init() {
-
 		//		初始化棋盘
 		for (int x = 0; x < 19; x ++) {
 			for (int y = 0; y <19; y ++) {
@@ -368,10 +392,17 @@ class Game {
 		} else {
 			firstCheesePlayer = 1;
 		}
+		
+		//初始化棋子
+		nowCheese = "X";
 	}
 	//	落子
 	public void putCheese(int x, int y)	{
 		cheesboard[x][y] = nowCheese;
+		lasterX = lastX;
+		lasterY = lastY;
+		lastX = x;
+		lastY = y;
 	}
 	//	换手
 	public void turnEnd() {
@@ -411,7 +442,6 @@ class Game {
 	}
 	//	判断当前棋子胜负之后的操作
 	public void afterJudge() {
-
 			if((firstCheesePlayer == 1 && nowCheese == "X") || (firstCheesePlayer == 2 && nowCheese == "O")) {
 				player1.setWincount();
 				player2.setLosecount();
@@ -438,7 +468,7 @@ class Net {
 	int spot;
 	 Socket server;
 
-	 //	设置ip
+	 // 设置ip
 	public void setIp(String ip) {
 		this.ip = ip;
 	}
