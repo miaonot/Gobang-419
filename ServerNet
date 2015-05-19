@@ -1,0 +1,74 @@
+//设置客户端网络模块
+class ServerNet {
+	int x,y;//己方所下位置坐标
+	int m,n;//对方所下位置坐标
+	String IP;//IP
+	int port;//端口
+	ServerSocket server;
+	Socket Client;
+	public InputStream DataIn;
+	public OutputStream DataOut;
+	
+	//设置IP
+	public void setIP(String IP) {
+		this.IP = IP;
+	}
+	
+	//设置端口
+	public void setPort(int port) {
+		this.port = port;
+	}
+	
+	//玩家所下位置
+		public void Input(int x,int y) {
+			this.x=x;
+			this.y=y;
+		}
+		//对手所下位置
+		public void Output(int m,int n){
+			this.m = m;
+			this.n = n;
+		}
+	
+	//连接服务机
+	public void connect() throws Exception{
+		server = new ServerSocket(port);
+		Client = server.accept();
+		JOptionPane.showInputDialog("已连接","进入游戏");
+	}
+	
+	//获取对方下棋位置
+		public int[] getEnemyAddress() throws IOException {
+			int[] num = new int[2];
+			DataIn = Client.getInputStream();
+			
+			byte []a = {(byte) m};
+			byte []b = {(byte) n};
+			DataIn.read(a);
+			String str1 = new String(a);
+			num[0] = Integer.getInteger(str1); //横行坐标
+			DataIn.read(b);
+			String str2 = new String(b);
+			num[1] = Integer.getInteger(str2); //纵行坐标
+			return num;
+		}
+		//输出己方下棋位置
+		public void InputMyAddress()  {
+			try{
+				DataOut = Client.getOutputStream();
+				
+				DataOut.write(x); //输出横行坐标
+				DataOut.write(y); //输出纵行坐标
+			} catch (IOException ioe) {
+				ioe.printStackTrace();
+			}
+			
+		}
+	
+}
+
+public class Gobang {
+	public static void main(String[] args) {
+		new ServerNet();
+	}
+}
