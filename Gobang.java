@@ -462,25 +462,71 @@ class Game {
 
 }
 
-//	网络模块
-class Net {
-	String ip;
-	int spot;
-	 Socket server;
-
-	 // 设置ip
-	public void setIp(String ip) {
-		this.ip = ip;
+//设置客户端网络模块
+class ClientNet {
+	int x,y;//己方所下位置坐标
+	int m,n;//对方所下位置坐标
+	String IP;//IP
+	int port;//端口
+	Socket Client;
+	public InputStream DataIn;
+	public OutputStream DataOut;
+	
+	//设置IP
+	public void setIP(String IP) {
+		this.IP = IP;
 	}
-	//	设置端口
-	public void setSpot(int spot) {
-		this.spot = spot;
+	
+	//设置端口
+	public void setPort(int port) {
+		this.port = port;
 	}
-	//	连接服务器
-	public void connectToServer() {
-		try {
-			server = new Socket(ip,spot);
-		} catch(IOException ioe) {
+	
+	//玩家所下位置
+		public void Input(int x,int y) {
+			this.x=x;
+			this.y=y;
+		}
+		//对手所下位置
+		public void Output(int m,int n){
+			this.m = m;
+			this.n = n;
+		}
+	
+	//连接服务机
+	public void connect() throws Exception{
+		Client = new Socket(IP,port); //华宗汉电脑IP"192.168.43.155"
+		if(Client.isConnected()) {
+			JOptionPane.showInputDialog("已连接","进入游戏");
 		}
 	}
+	
+	//获取对方下棋位置
+		public int[] getEnemyAddress() throws IOException {
+			int[] num = new int[2];
+			DataIn = Client.getInputStream();
+			
+			byte []a = {(byte) m};
+			byte []b = {(byte) n};
+			DataIn.read(a);
+			String str1 = new String(a);
+			num[0] = Integer.getInteger(str1); //横行坐标
+			DataIn.read(b);
+			String str2 = new String(b);
+			num[1] = Integer.getInteger(str2); //纵行坐标
+			return num;
+		}
+		//输出己方下棋位置
+		public void InputMyAddress()  {
+			try{
+				DataOut = Client.getOutputStream();
+				
+				DataOut.write(x); //输出横行坐标
+				DataOut.write(y); //输出纵行坐标
+			} catch (IOException ioe) {
+				ioe.printStackTrace();
+			}
+			
+		}
+	
 }
