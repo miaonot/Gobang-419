@@ -463,11 +463,12 @@ class Game {
 }
 
 //设置客户端网络模块
-class ClientNet {
+class ServerNet {
 	int x,y;//己方所下位置坐标
 	int m,n;//对方所下位置坐标
 	String IP;//IP
 	int port;//端口
+	ServerSocket server;
 	Socket Client;
 	public InputStream DataIn;
 	public OutputStream DataOut;
@@ -494,11 +495,13 @@ class ClientNet {
 		}
 	
 	//连接服务机
-	public void connect() throws Exception{
-		Client = new Socket(IP,port); //华宗汉电脑IP"192.168.43.155"
-		if(Client.isConnected()) {
-			JOptionPane.showInputDialog("已连接","进入游戏");
+	public void connect() throws Exception {
+		Client = new Socket (IP,port);
+		if(Client.isConnected()){
+			String str = "" + Client.getInetAddress().getHostName();
+			JOptionPane.showInputDialog("已与服务器连接",str);
 		}
+		
 	}
 	
 	//获取对方下棋位置
@@ -506,8 +509,8 @@ class ClientNet {
 			int[] num = new int[2];
 			DataIn = Client.getInputStream();
 			
-			byte []a = {(byte) m};
-			byte []b = {(byte) n};
+			byte []a = new byte[512];
+			byte []b = new byte[512];
 			DataIn.read(a);
 			String str1 = new String(a);
 			num[0] = Integer.getInteger(str1); //横行坐标
@@ -520,8 +523,11 @@ class ClientNet {
 		public void InputMyAddress()  {
 			try{
 				DataOut = Client.getOutputStream();
-				
-				DataOut.write(x); //输出横行坐标
+				String str1 = "" + x;
+				byte[] a = str1.getBytes(); 
+				DataOut.write(a); //输出横行坐标
+				String str2 = "" + y;
+				byte[] b = str2.getBytes();
 				DataOut.write(y); //输出纵行坐标
 			} catch (IOException ioe) {
 				ioe.printStackTrace();
