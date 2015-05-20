@@ -1,74 +1,86 @@
-//设置客户端网络模块
+import java.io.*;
+import java.net.*;
+
 class ServerNet {
-	int x,y;//己方所下位置坐标
-	int m,n;//对方所下位置坐标
-	String IP;//IP
-	int port;//端口
+	int port;
+	int m,n,x,y;
 	ServerSocket server;
-	Socket Client;
-	public InputStream DataIn;
-	public OutputStream DataOut;
-	
-	//设置IP
-	public void setIP(String IP) {
-		this.IP = IP;
-	}
+	Socket client1,client2;
+	InputStream DataIn;
+	OutputStream DataOut;
 	
 	//设置端口
 	public void setPort(int port) {
 		this.port = port;
 	}
 	
-	//玩家所下位置
-		public void Input(int x,int y) {
-			this.x=x;
-			this.y=y;
+	//设置与客户机连接
+	public void connect () {
+		try {
+			server = new ServerSocket(port);
+			client1 = server.accept();
+			System.out.println("已经与其中一只客户机连接"+client1.getInetAddress().getHostName());
+			client2 = server.accept();
+			System.out.println("已经与其中一只客户机连接"+client1.getInetAddress().getHostName());
+		} catch(IOException ioe) {
+			ioe.printStackTrace();
 		}
-		//对手所下位置
-		public void Output(int m,int n){
-			this.m = m;
-			this.n = n;
-		}
-	
-	//连接服务机
-	public void connect() throws Exception{
-		server = new ServerSocket(port);
-		Client = server.accept();
-		JOptionPane.showInputDialog("已连接","进入游戏");
 	}
 	
-	//获取对方下棋位置
-		public int[] getEnemyAddress() throws IOException {
-			int[] num = new int[2];
-			DataIn = Client.getInputStream();
-			
-			byte []a = {(byte) m};
-			byte []b = {(byte) n};
+	//client1传向client2
+	public void  deliver1to2 () {
+		try {
+			DataIn = client1.getInputStream();
+			DataOut = client2.getOutputStream();
+			byte[] a = new byte[512];
 			DataIn.read(a);
-			String str1 = new String(a);
-			num[0] = Integer.getInteger(str1); //横行坐标
+			DataOut.write(a);
+			byte[] b = new byte[512];
 			DataIn.read(b);
-			String str2 = new String(b);
-			num[1] = Integer.getInteger(str2); //纵行坐标
-			return num;
+			DataOut.write(b);
+		} catch(IOException ioe) {
+			ioe.printStackTrace();
 		}
-		//输出己方下棋位置
-		public void InputMyAddress()  {
-			try{
-				DataOut = Client.getOutputStream();
-				
-				DataOut.write(x); //输出横行坐标
-				DataOut.write(y); //输出纵行坐标
-			} catch (IOException ioe) {
-				ioe.printStackTrace();
-			}
-			
-		}
+	}
 	
+	//client2传向client1
+	public void  deliver2to1 () {
+		try {
+			DataIn = client2.getInputStream();
+			DataOut = client1.getOutputStream();
+			byte[] a = new byte[512];
+			DataIn.read(a);
+			DataOut.write(a);
+			byte[] b = new byte[512];
+			DataIn.read(b);
+			DataOut.write(b);
+		} catch(IOException ioe) {
+			ioe.printStackTrace();
+		}
+	}
+	
+	//关闭连接
+	public void closeUp() {
+		try {
+			server.close();
+		} catch(IOException ioe) {
+			ioe.printStackTrace();
+		}
+	}
 }
 
-public class Gobang {
+public class ServerGobang {
 	public static void main(String[] args) {
-		new ServerNet();
+		ServerNet test = new ServerNet();
+		test.connect();
+		try{
+			while(true) {
+				test.deliver1to2();
+				test.deliver2to1();
+		}
+			
+		} finally {
+			test.closeUp();
+		}
 	}
 }
