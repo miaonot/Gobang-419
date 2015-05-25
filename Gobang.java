@@ -1,22 +1,23 @@
 import javax.swing.*;
-
 import java.awt.*;
 import java.awt.event.*;
 import java.awt.geom.Ellipse2D;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.Socket;
 
 
 public class Gobang {
 //	用于记录线上线下选择用的变量
-	static boolean isP2p;
+	static boolean isPvp;
 
 //	记录线上线下的选择
-	public static void setIsP2p(boolean a) {
-		isP2p = a;
+	public static void setIsPvp(boolean a) {
+		isPvp = a;
 	}
-	public static boolean isP2p() {
-		return isP2p;
+	public static boolean isPvp() {
+		return isPvp;
 	}
 
 	public static void main(String[] args) {
@@ -29,8 +30,8 @@ public class Gobang {
 class Window {
 	//	登录界面初版
 	class LoginWindow extends JFrame {
-		JButton button1 = new JButton("线上");
-		JButton button2 = new JButton("线下");
+		JButton button1 = new JButton("pvp");
+		JButton button2 = new JButton("pvc");
 		
 		public LoginWindow() {
 			 super("欢迎使用五子棋程序");
@@ -43,15 +44,16 @@ class Window {
 			
 			button1.addActionListener(new ActionListener() {
 				public void actionPerformed (ActionEvent e) {
-					Gobang.setIsP2p(true);
-					loginToConnect();
+					Gobang.setIsPvp(true);
+//					loginToConnect();
+					loginToMain();
 				}
 			});
 
 			
 			button2.addActionListener(new ActionListener() {
 				public void actionPerformed (ActionEvent e) {
-					Gobang.setIsP2p(true);
+					Gobang.setIsPvp(false);
 					loginToMain();
 				}
 			});
@@ -81,9 +83,13 @@ class Window {
 			button.addActionListener(new ActionListener() {
 				public void actionPerformed(ActionEvent e) {
 					int i = Integer.parseInt(spot.getText());
-					net.setIp(ip.getText());
-					net.setSpot(i);
-					net.connectToServer();
+					net.setIP(ip.getText());
+					net.setPort(i);
+					try {
+						net.connect();
+					} catch (Exception e1) {
+						e1.printStackTrace();
+					}
 					connectToMain();
 				}
 			});
@@ -146,14 +152,9 @@ class Window {
 							for (int x = 0; x < 19; x ++) {
 								for (int y = 0; y < 19; y ++) {
 									if (e.getSource() == button[x][y]) {
-										if (game.nowCheese == "X") {
-											button[x][y].yuan("",Color.black);
-										} else {
-											button[x][y].yuan("",Color.white);
-										}
+										putcheese(x, y);
 										
-										button[x][y].setOpaque(true);
-										button[x][y].setEnabled(false);
+										System.out.println("(" + x + "," + y + ")");
 										
 										game.putCheese(x, y);
 										boolean	isWin = game.judge();
@@ -164,6 +165,25 @@ class Window {
 										}
 										game.turnEnd();
 										
+										//判断机器端是否需要下
+										if (!Gobang.isPvp()) {
+											int[] xy = game.ai.operate();
+											int a = xy[0];
+											int b = xy[1];
+											System.out.println("(" + a + "," + b + ")");
+											
+											putcheese(a, b);
+											
+											game.putCheese(a, b);
+											isWin = game.judge();
+											if(isWin == true) {
+												game.afterJudge();
+												lock();
+												mainToNewGame();
+											}
+											
+											game.turnEnd();
+										}
 									}
 								}
 							}
@@ -188,6 +208,8 @@ class Window {
 					button[x][y].setEnabled(true);
 				}
 			}
+			button1.setEnabled(true);
+			button2.setEnabled(true);
 		}
 		
 		//悔棋
@@ -205,6 +227,18 @@ class Window {
 					button[x][y].setEnabled(false);
 				}
 			}
+			button1.setEnabled(false);
+			button2.setEnabled(false);
+		}
+		
+		public void putcheese(int x, int y) {
+			if (game.nowCheese == "X") {
+				button[x][y].yuan("",Color.black);
+			} else {
+				button[x][y].yuan("",Color.white);
+			}
+			button[x][y].setOpaque(true);
+			button[x][y].setEnabled(false);
 		}
 		
 	}
@@ -233,7 +267,7 @@ class Window {
 			
 			button2.addActionListener(new ActionListener() {
 				public void actionPerformed(ActionEvent e) {
-					System.exit(0);
+					newGameToLogin();
 				}
 			});
 
@@ -304,7 +338,9 @@ class Window {
 	//	用于登录界面转到主界面
 	public void loginToMain() {
 		lw.setVisible(false);
+		mw.init();
 		mw.setVisible(true);
+		game.init();
 	}
 
 	//	登录界面打开连接服务器界面
@@ -324,13 +360,18 @@ class Window {
 		ngw.setVisible(true);
 	}
 
+	public void newGameToLogin() {
+		ngw.setVisible(false);
+		mw.setVisible(false);
+		lw.setVisible(true);
+	}
 	//	初始化窗口
 	LoginWindow lw = new LoginWindow();
 	ConnectWindow cw = new ConnectWindow();
 	MainWindow mw = new MainWindow();
 	NewGameWindow ngw = new NewGameWindow();
 	Game game = new Game();
-	Net net = new Net();
+	ClientNet net = new ClientNet();
 
 }
 
@@ -342,6 +383,7 @@ class Player {
 	int wincount;
 	int losecount;
 	int tiecount;
+	
 	public Player(String name) {
 		this.name = name;
 	}
@@ -376,6 +418,7 @@ class Game {
 	int lasterY = 0;
 	String nowCheese = "X";
 	int firstCheesePlayer = 1;
+	AI ai = new AI();
 
 	//	初始化游戏
 	public void init() {
@@ -417,7 +460,7 @@ class Game {
 		for (int x = 0; x <19; x++) {
 			for (int y = 0; y < 19; y++) {
 				if (x + 4 < 19 && y + 4 < 19) {
-					if (cheesboard[x][y] == nowCheese && cheesboard[x + 1][y +1] == nowCheese && cheesboard[x + 2][y +2] == nowCheese && cheesboard[x + 3][y +3] == nowCheese && cheesboard[x + 4][y +4] == nowCheese) {
+					if (cheesboard[x][y] == nowCheese && cheesboard[x + 1][y + 1] == nowCheese && cheesboard[x + 2][y + 2] == nowCheese && cheesboard[x + 3][y + 3] == nowCheese && cheesboard[x + 4][y + 4] == nowCheese) {
 						return true;
 					}
 				}
@@ -427,12 +470,12 @@ class Game {
 					}
 				}
 				if (y + 4 < 19) {
-					if (cheesboard[x][y] == nowCheese && cheesboard[x][y +1] == nowCheese && cheesboard[x][y +2] == nowCheese && cheesboard[x][y +3] == nowCheese && cheesboard[x][y +4] == nowCheese) {
+					if (cheesboard[x][y] == nowCheese && cheesboard[x][y + 1] == nowCheese && cheesboard[x][y + 2] == nowCheese && cheesboard[x][y + 3] == nowCheese && cheesboard[x][y + 4] == nowCheese) {
 						return true;
 					}
 				}
 				if (x + 4 < 19 && y - 4 >= 0) {
-					if (cheesboard[x][y] == nowCheese && cheesboard[x + 1][y +1] == nowCheese && cheesboard[x + 2][y +2] == nowCheese && cheesboard[x + 3][y +3] == nowCheese && cheesboard[x + 4][y +4] == nowCheese) {
+					if (cheesboard[x][y] == nowCheese && cheesboard[x + 1][y - 1] == nowCheese && cheesboard[x + 2][y - 2] == nowCheese && cheesboard[x + 3][y - 3] == nowCheese && cheesboard[x + 4][y - 4] == nowCheese) {
 						return true;
 					}
 				}
@@ -440,6 +483,7 @@ class Game {
 		}
 		return false;
 	}
+	
 	//	判断当前棋子胜负之后的操作
 	public void afterJudge() {
 			if((firstCheesePlayer == 1 && nowCheese == "X") || (firstCheesePlayer == 2 && nowCheese == "O")) {
@@ -450,15 +494,799 @@ class Game {
 				player2.setWincount();
 			}
 	}
+	
 	//	悔棋
 	public void withdraw() {
 		cheesboard[lastX][lastY] = null;
 	}
+	
 	//	认输
 	public void giveUp() {
 		player1.setLosecount();
 		player2.setWincount();
 	}
+	
+	class AI {		
+		int temp = -99;
+		int max = -99;
+		private int[] xy = {9,9};
+		private int i;//�����
+		private int t;//�����
+		private void changeXY() {
+			if(max<temp)  {
+				xy[0]=i;xy[1]=t;
+				max=temp;
+			}
+		}
+		//-2&-3
+		private void lookFor1() {
+			/*--------------------һ----------------------------------------*/
+			if(t+1<19) {
+				if(null!=cheesboard[i][t+1]) {
+					if(cheesboard[i][t+1]==nowCheese) {//��
+						temp = -2;
+						changeXY();
+					} else {
+					temp = -3;
+					changeXY();
+					}
+				}
+			}
+			if(t-1>=0) {
+				if(null!=cheesboard[i][t-1]) {
+					if(cheesboard[i][t-1]==nowCheese) {//��
+						temp = -2;
+						changeXY();
+					} else {
+						temp = -3;
+					changeXY();
+					}
+				}
+			}
+			if(i+1<19) {
+				if(null!=cheesboard[i+1][t]) {
+					if(cheesboard[i+1][t]==nowCheese) {//��
+						temp = -2;
+						changeXY();
+					} else {
+						temp = -3;
+					changeXY();
+					}
+				}
+			}
+			if(i-1>=0) {
+				if(null!=cheesboard[i-1][t]) {
+					if(cheesboard[i-1][t]==nowCheese) {//��
+						temp = -2;
+						changeXY();
+					} else {
+						temp = -3;
+					changeXY();
+					}
+				}
+			}
+			if(i-1>=0&&t-1>=0) {
+				if(null!=cheesboard[i-1][t-1]) {
+					if(cheesboard[i-1][t-1]==nowCheese) {//�I
+						temp = -2;
+						changeXY();
+					} else {
+						temp = -3;
+					changeXY();
+					}
+				}
+			}
+			if(i+1<19&&t+1<19) {
+				if(null!=cheesboard[i+1][t+1]) {
+					if(cheesboard[i+1][t+1]==nowCheese) {//�K
+						temp = -2;
+						changeXY();
+					} else {
+						temp = -3;
+					changeXY();
+					}
+				}
+			}
+			if(i-1>=0&&t+1<19) {
+				if(null!=cheesboard[i-1][t+1]) {
+					if(cheesboard[i-1][t+1]==nowCheese) {//�J
+						temp = -2;
+						changeXY();
+					} else {
+						temp = -3;
+					changeXY();
+					}
+				}
+			}
+			if(i+1<19&&t-1>=0) {
+				if(null!=cheesboard[i+1][t-1]) {
+					if(cheesboard[i+1][t-1]==nowCheese) {//�L
+						temp = -2;
+						changeXY();
+					} else {
+						temp = -3;
+					changeXY();
+					}
+				}
+			}
+		}
+		//0&-1
+	
+		private void lookFor2()  {
+			/*-----------------------------��------------------------------------*/
+			if(t+2<19) {
+				if(null!=cheesboard[i][t+1]&&
+						cheesboard[i][t+1]==cheesboard[i][t+2]) {
+					if(cheesboard[i][t+1]==nowCheese) {//��
+						temp = 0;
+						changeXY();
+					} else {
+						temp = -1;
+					changeXY();
+					}
+				}
+			}
+			if(t-2>=0) {
+				if(null!=cheesboard[i][t-1]&&
+						cheesboard[i][t-1]==cheesboard[i][t-2]) {
+					if(cheesboard[i][t-1]==nowCheese) {//��
+						temp = 0;
+						changeXY();
+					} else {
+						temp = -1;
+					changeXY();
+					}
+				}
+			}
+			if(i+2<19) {
+				if(null!=cheesboard[i+1][t]&&
+						cheesboard[i+1][t]==cheesboard[i+2][t]) {
+					if(cheesboard[i+1][t]==nowCheese) {//��
+						temp = 0;
+						changeXY();
+					} else {
+						temp = -1;
+					changeXY();
+					}
+				}
+			}
+			if(i-2>=0) {
+				if(null!=cheesboard[i-1][t]&&
+						cheesboard[i-1][t]==cheesboard[i-2][t]) {
+					if(cheesboard[i-1][t]==nowCheese) {//��
+						temp = 0;
+						changeXY();
+					} else {
+						temp = -1;
+						changeXY();
+					}
+				}
+			}
+			if(i-2>=0&&t-2>=0) {
+				if(null!=cheesboard[i-1][t-1]&&
+						cheesboard[i-1][t-1]==cheesboard[i-2][t-2]) {
+					if(cheesboard[i][t]==nowCheese) {//�I
+						temp = 0;
+						changeXY();
+					} else {
+						temp = -1;
+						changeXY();
+					}
+				}
+			}
+			if(i+2<19&&t+2<19) {
+				if(null!=cheesboard[i+1][t+1]&&
+						cheesboard[i+1][t+1]==cheesboard[i+2][t+2]) {
+					if(cheesboard[i+1][t+1]==nowCheese) {//�K
+						temp = 0;
+						changeXY();
+					} else {
+						temp = -1;
+						changeXY();
+					}
+				}
+			}
+			if(i-2>=0&&t+2<19) {
+				if(null!=cheesboard[i-1][t+1]&&
+						cheesboard[i-1][t+1]==cheesboard[i-2][t+2]) {
+					if(cheesboard[i-1][t+1]==nowCheese) {//�J
+						temp = 0;
+						changeXY();
+					} else {
+						temp = -1;
+					changeXY();
+					}
+				}
+			}
+			if(i+2<19&&t-2>=0) {
+				if(null!=cheesboard[i+1][t-1]&&
+						cheesboard[i+1][t-1]==cheesboard[i+2][t-2]) {
+					if(cheesboard[i+1][t-1]==nowCheese) {//�L
+						temp = 0;
+						changeXY();
+					} else {
+						temp = -1;
+					changeXY();
+					}
+				}
+			}
+	/*------------------------------һ��һ-------------------------------------------*/
+			if(t+1<19&&t-1>=0) {
+				if(null!=cheesboard[i][t+1]&&
+						cheesboard[i][t+1]==cheesboard[i][t-1]) {
+					if(cheesboard[i][t+1]==nowCheese) {
+						temp = 0;
+						changeXY();
+					} else {
+						temp = -1;
+					changeXY();
+					}
+				}
+			}
+			if(i+1<19&&i-1>=0) {
+				if(null!=cheesboard[i+1][t]&&
+						cheesboard[i+1][t]==cheesboard[i-1][t]) {
+					if(cheesboard[i+1][t]==nowCheese) {
+						temp = 0;
+						changeXY();
+					} else {
+						temp = -1;
+					changeXY();
+					}
+				}
+			}
+			if(i-1>=0&&t-1>=0&&i+1<19&&t+1<19) {
+				if(null!=cheesboard[i-1][t-1]&&
+						cheesboard[i-1][t-1]==cheesboard[i+1][t+1]) {
+					if(cheesboard[i-1][t-1]==nowCheese) {
+						temp = 0;
+						changeXY();
+					} else {
+						temp = -1;
+					changeXY();
+					}
+				}
+			}
+			if(i-1>=0&&t+1<19&&i+1<19&&t-1>=0) {
+				if(null!=cheesboard[i-1][t+1]&&
+						cheesboard[i-1][t+1]==cheesboard[i+1][t-1]) {
+					if(cheesboard[i-1][t+1]==nowCheese) {
+						temp = 0;
+						changeXY();
+					} else {
+						temp = -1;
+					changeXY();
+					}
+				}
+			}
+		}
+		//2&1
+		private void lookFor3() {
+			/*-----------------------------------��---------------------------------------------------------*/
+			if(t+3<19) {
+				if(null!=cheesboard[i][t+1]&&
+						cheesboard[i][t+1]==cheesboard[i][t+2]&&
+						cheesboard[i][t+2]==cheesboard[i][t+3]) {
+					if(cheesboard[i][t+1]==nowCheese) {//��
+						temp = 2;
+						changeXY();
+					} else {
+						temp = 1;
+						changeXY();
+					}
+				}
+			}
+			if(t-3>=0) {
+				if(null!=cheesboard[i][t-1]&&
+						cheesboard[i][t-1]==cheesboard[i][t-2]&&
+						cheesboard[i][t-2]==cheesboard[i][t-3]) {
+					if(cheesboard[i][t-1]==nowCheese) {//��
+						temp = 2;
+						changeXY();
+					} else {
+						temp = 1;
+						changeXY();
+					}
+				}
+			}
+			if(i+3<19) {
+				if(null!=cheesboard[i+1][t]&&
+						cheesboard[i+1][t]==cheesboard[i+2][t]&&
+						cheesboard[i+2][t]==cheesboard[i+3][t]) {
+					if(cheesboard[i+1][t]==nowCheese) {//��
+						temp = 2;
+						changeXY();
+					} else {
+						temp = 1;
+						changeXY();
+					}
+				}
+			}
+			if(i-3>=0) {
+				if(null!=cheesboard[i-1][t]&&
+						cheesboard[i-1][t]==cheesboard[i-2][t]&&
+						cheesboard[i-2][t]==cheesboard[i-3][t]) {
+					if(cheesboard[i-1][t]==nowCheese) {//��
+						temp = 2;
+						changeXY();
+					} else {
+						temp = 1;
+						changeXY();
+					}
+				}
+			}
+			if(i-3>=0&&t-3>=0) {
+				if(null!=cheesboard[i-1][t-1]&&
+						cheesboard[i-1][t-1]==cheesboard[i-2][t-2]&&
+						cheesboard[i-2][t-2]==cheesboard[i-3][t-3]) {
+					if(cheesboard[i-1][t-1]==nowCheese) {//�I
+						temp = 2;
+						changeXY();
+					} else {
+						temp = 1;
+						changeXY();
+					}
+				}
+			}
+			if(i+3<19&&t+3<19) {
+				if(null!=cheesboard[i+1][t+1]&&
+						cheesboard[i+1][t+1]==cheesboard[i+2][t+2]&&
+						cheesboard[i+2][t+2]==cheesboard[i+3][t+3]) {
+					if(cheesboard[i+1][t+1]==nowCheese) {//�K
+						temp = 2;
+						changeXY();
+					} else {
+						temp = 1;
+						changeXY();
+					}
+				}
+			}
+			if(i-3>=0&&t+3<19) {
+				if(null!=cheesboard[i-1][t+1]&&
+						cheesboard[i-1][t+1]==cheesboard[i-2][t+2]&&
+						cheesboard[i-2][t+2]==cheesboard[i-3][t+3]) {
+					if(cheesboard[i-1][t+1]==nowCheese) {//�J
+						temp = 2;
+						changeXY();
+					} else {
+						temp = 1;
+					changeXY();
+					}
+				}
+			}
+			if(i+3<19&&t-3>=0) {
+				if(null!=cheesboard[i+1][t-1]&&
+						cheesboard[i+1][t-1]==cheesboard[i+2][t-2]&&
+						cheesboard[i+2][t-2]==cheesboard[i+3][t-3]) {
+					if(cheesboard[i+1][t-1]==nowCheese) {//�L
+						temp = 2;
+						changeXY();
+					} else {
+						temp = 1;
+					changeXY();
+					}
+				}
+			}
+	/*---------------------------һ�Ӷ�-----------------------------------------*/
+			if(t+2<19&&t-1>=0) {
+				if(cheesboard[i][t+1]!=null&&
+						cheesboard[i][t+1]==cheesboard[i][t+2]&&
+						cheesboard[i][t+2]==cheesboard[i][t-1]) {
+					if(cheesboard[i][t+1]==nowCheese) {//��
+						temp = 2;
+						changeXY();
+					} else {
+						temp = 1;
+					changeXY();
+					}
+				}
+			}
+			if(t-2>=0&&t+1<19) {
+				if(null!=cheesboard[i][t-1]&&
+						cheesboard[i][t-1]==cheesboard[i][t-2]&&
+						cheesboard[i][t-2]==cheesboard[i][t+1]) {
+					if(cheesboard[i][t-1]==nowCheese) {//��
+						temp = 2;
+						changeXY();
+					} else {
+						temp = 1;
+					changeXY();
+					}
+				}
+			}
+			if(i+2<19&&i-1>=0) {
+				if(null!=cheesboard[i+1][t]&&
+						cheesboard[i+1][t]==cheesboard[i+2][t]&&
+						cheesboard[i+2][t]==cheesboard[i-1][t]) {
+					if(cheesboard[i+1][t]==nowCheese) {//��
+						temp = 2;
+						changeXY();
+					} else {
+						temp = 1;
+					changeXY();
+					}
+				}
+			}
+			if(i-2>=0&&i+1<19) {
+				if(null!=cheesboard[i-1][t]&&
+						cheesboard[i-1][t]==cheesboard[i-2][t]&&
+						cheesboard[i-2][t]==cheesboard[i+1][t]) {
+					if(cheesboard[i-1][t]==nowCheese) {//��
+						temp = 2;
+						changeXY();
+					} else {
+						temp = 1;
+					changeXY();
+					}
+				}
+			}
+			if(i-2>=0&&t-2>=0&&i+1<19&&t+1<19) {
+				if(null!=cheesboard[i-1][t-1]&&
+						cheesboard[i-1][t-1]==cheesboard[i-2][t-2]&&
+						cheesboard[i-2][t-2]==cheesboard[i+1][t+1]) {
+					if(cheesboard[i-1][t-1]==nowCheese) {//�I
+						temp = 2;
+						changeXY();
+					} else {
+						temp = 1;
+					changeXY();
+					}
+				}
+			}
+			if(i+2<19&&t+2<19&&i-1>=0&&t-1>=0) {
+				if(null!=cheesboard[i+1][t+1]&&
+						cheesboard[i+1][t+1]==cheesboard[i+2][t+2]&&
+						cheesboard[i+2][t+2]==cheesboard[i-1][t-1]) {
+					if(cheesboard[i+1][t+1]==nowCheese) {//�K
+						temp = 2;
+						changeXY();
+					} else {
+						temp = 1;
+					changeXY();
+					}
+				}
+			}
+			if(i-2>=0&&t+2<19&&i+1<19&&t-1>=0) {
+				if(null!=cheesboard[i-1][t+1]&&
+						cheesboard[i-1][t+1]==cheesboard[i-2][t+2]&&
+						cheesboard[i-2][t+2]==cheesboard[i+1][t-1]) {
+					if(cheesboard[i-1][t+1]==nowCheese) {//�J
+						temp = 2;
+						changeXY();
+					} else {
+						temp = 1;
+					changeXY();
+					}
+				}
+			}
+			if(i+2<19&&t-2>=0&&i-1>=0&&t+1<19) {
+				if(null!=cheesboard[i+1][t-1]&&
+						cheesboard[i+1][t-1]==cheesboard[i+2][t-2]&&
+						cheesboard[i+2][t-2]==cheesboard[i-1][t+1]) {
+					if(cheesboard[i+1][t-1]==nowCheese) {//�L
+						temp = 2;
+						changeXY();
+					} else {
+						temp = 1;
+					changeXY();
+					}
+				}
+			}
+		}
+		//4&3
+	
+		private void lookFor4() {
+			/*-------------------------��--------------------------------------*/		
+			if(t+4<19) {
+				if(cheesboard[i][t+1]!=null&&
+						cheesboard[i][t+1]==cheesboard[i][t+2]&&
+						cheesboard[i][t+2]==cheesboard[i][t+3]&&
+						cheesboard[i][t+3]==cheesboard[i][t+4]) {
+					if(cheesboard[i][t+1]==nowCheese) {//��
+						temp = 4;
+						changeXY();
+					} else {
+						temp = 3;
+					changeXY();
+					}
+				}
+			}
+			if(t-4>=0) {
+				if(null!=cheesboard[i][t-1]&&
+						cheesboard[i][t-1]==cheesboard[i][t-2]&&
+						cheesboard[i][t-2]==cheesboard[i][t-3]&&
+						cheesboard[i][t-3]==cheesboard[i][t-4]) {
+					if(cheesboard[i][t-1]==nowCheese) {//��
+						temp = 4;
+						changeXY();
+					} else {
+						temp = 3;
+					changeXY();
+					}
+				}
+			}
+			if(i+4<19) {
+				if(null!=cheesboard[i+1][t]&&
+						cheesboard[i+1][t]==cheesboard[i+2][t]&&
+						cheesboard[i+2][t]==cheesboard[i+3][t]&&
+						cheesboard[i+3][t]==cheesboard[i+4][t]) {
+					if(cheesboard[i+1][t]==nowCheese) {//��
+						temp = 4;
+						changeXY();
+					} else {
+						temp = 3;
+					changeXY();
+					}
+				}
+			}
+			if(i-4>=0) {
+				if(null!=cheesboard[i-1][t]&&
+						cheesboard[i-1][t]==cheesboard[i-2][t]&&
+						cheesboard[i-2][t]==cheesboard[i-3][t]&&
+						cheesboard[i-3][t]==cheesboard[i-4][t]) {
+					if(cheesboard[i-1][t]==nowCheese) {//��
+						temp = 4;
+						changeXY();
+					} else {
+						temp = 3;
+					changeXY();
+					}
+				}
+			}
+			if(i-4>=0&&t-4>=0) {
+				if(null!=cheesboard[i-1][t-1]&&
+						cheesboard[i-1][t-1]==cheesboard[i-2][t-2]&&
+						cheesboard[i-2][t-2]==cheesboard[i-3][t-3]&&
+						cheesboard[i-3][t-3]==cheesboard[i-4][t-4]) {
+					if(cheesboard[i-1][t-1]==nowCheese) {//�I
+						temp = 4;
+						changeXY();
+					} else {
+						temp = 3;
+					changeXY();
+					}
+				}
+			}
+			if(i+4<19&&t+4<19) {
+				if(null!=cheesboard[i+1][t+1]&&
+						cheesboard[i+1][t+1]==cheesboard[i+2][t+2]&&
+						cheesboard[i+2][t+2]==cheesboard[i+3][t+3]&&
+						cheesboard[i+3][t+3]==cheesboard[i+4][t+4]) {
+					if(cheesboard[i+1][t+1]==nowCheese) {//�K
+						temp = 4;
+						changeXY();
+					} else {
+						temp = 3;
+					changeXY();
+					}
+				}
+			}
+			if(i-4>=0&&t+4<19) {
+				if(null!=cheesboard[i-1][t+1]&&
+						cheesboard[i-1][t+1]==cheesboard[i-2][t+2]&&
+						cheesboard[i-2][t+2]==cheesboard[i-3][t+3]&&
+						cheesboard[i-3][t+3]==cheesboard[i-4][t+4]) {
+					if(cheesboard[i-1][t+1]==nowCheese) {//�J
+						temp = 4;
+						changeXY();
+					} else {
+						temp = 3;
+					changeXY();
+					}
+				}
+			}
+			if(i+4<19&&t-4>=0) {
+				if(null!=cheesboard[i+1][t-1]&&
+						cheesboard[i+1][t-1]==cheesboard[i+2][t-2]&&
+						cheesboard[i+2][t-2]==cheesboard[i+3][t-3]&&
+						cheesboard[i+3][t-3]==cheesboard[i+4][t-4]) {
+					if(cheesboard[i+1][t-1]==nowCheese) {//�L
+						temp = 4;
+						changeXY();
+					} else {
+						temp = 3;
+					changeXY();
+					}
+				}
+			}
+	/*---------------------------һ����----------------------------------------------*/
+			if(t+3<19&&t-1>=0) {
+				if(null!=cheesboard[i][t-1]&&
+						cheesboard[i][t-1]==cheesboard[i][t+1]&&
+						cheesboard[i][t-1]==cheesboard[i][t+2]&&
+						cheesboard[i][t-1]==cheesboard[i][t+3]) {
+					if(cheesboard[i][t-1]==nowCheese) {//��
+						temp = 4;
+						changeXY();
+					} else {
+						temp = 3;
+					changeXY();
+					}
+				}
+			}
+			if(t-3>=0&&t+1<19) {
+				if(null!=cheesboard[i][t-1]&&
+						cheesboard[i][t-1]==cheesboard[i][t-2]&&
+						cheesboard[i][t-1]==cheesboard[i][t-3]&&
+						cheesboard[i][t-1]==cheesboard[i][t+1]) {
+					if(cheesboard[i][t-1]==nowCheese) {//��
+						temp = 4;
+						changeXY();
+					} else {
+						temp = 3;
+					changeXY();
+					}
+				}
+			}
+			if(i+3<19&&i-1>=0) {
+				if(null!=cheesboard[i+1][t]&&
+						cheesboard[i+1][t]==cheesboard[i+2][t]&&
+						cheesboard[i+1][t]==cheesboard[i+3][t]&&
+						cheesboard[i+1][t]==cheesboard[i-1][t]) {
+					if(cheesboard[i+1][t]==nowCheese) {//��
+						temp = 4;
+						changeXY();
+					} else {
+						temp = 3;
+					changeXY();
+					}
+				}
+			}
+			if(i-3>=0&&i+1<19) {
+				if(null!=cheesboard[i-1][t]&&
+						cheesboard[i-1][t]==cheesboard[i-2][t]&&
+						cheesboard[i-1][t]==cheesboard[i-3][t]&&
+						cheesboard[i-1][t]==cheesboard[i+1][t]) {
+					if(cheesboard[i-1][t]==nowCheese) {//��
+						temp = 4;
+						changeXY();
+					} else {
+						temp = 3;
+					changeXY();
+					}
+				}
+			}
+			if(i-3>=0&&t-3>=0&&i+1<19&&t+1<19) {
+				if(null!=cheesboard[i-1][t-1]&&
+						cheesboard[i-1][t-1]==cheesboard[i-2][t-2]&&
+						cheesboard[i-1][t-1]==cheesboard[i-3][t-3]&&
+						cheesboard[i-1][t-1]==cheesboard[i+1][t+1]) {
+					if(cheesboard[i-1][t-1]==nowCheese) {//�I
+						temp = 4;
+						changeXY();
+					} else {
+						temp = 3;
+					changeXY();
+					}
+				}
+			}
+			if(i+3<19&&t+3<19&&t-1>=0&&i-1>=0) {
+				if(null!=cheesboard[i+1][t+1]&&
+						cheesboard[i+1][t+1]==cheesboard[i+2][t+2]&&
+						cheesboard[i+1][t+1]==cheesboard[i+3][t+3]&&
+						cheesboard[i+1][t+1]==cheesboard[i-1][t-1]) {
+					if(cheesboard[i+1][t+1]==nowCheese) {//�K
+						temp = 4;
+						changeXY();
+					} else {
+						temp = 3;
+					changeXY();
+					}
+				}
+			}
+			if(i-3>=0&&t+3<19&&t-1>=0&&i+1<19) {
+				if(null!=cheesboard[i-1][t+1]&&
+						cheesboard[i-1][t+1]==cheesboard[i-2][t+2]&&
+						cheesboard[i-1][t+1]==cheesboard[i-3][t+3]&&
+						cheesboard[i-1][t+1]==cheesboard[i+1][t-1]) {
+					if(cheesboard[i-1][t+1]==nowCheese) {//�J
+						temp = 4;
+						changeXY();
+					} else {
+						temp = 3;
+					changeXY();
+					}
+				}
+			}
+			if(i+3<19&&t-3>=0&&i-1>=0&&t+1<19) {
+				if(null!=cheesboard[i+1][t-1]&&
+						cheesboard[i+1][t-1]==cheesboard[i+2][t-2]&&
+						cheesboard[i+1][t-1]==cheesboard[i+3][t-3]&&
+						cheesboard[i+1][t-1]==cheesboard[i-1][t+1]) {
+					if(cheesboard[i+1][t-1]==nowCheese) {//�L
+						temp = 4;
+						changeXY();
+					} else {
+						temp = 3;
+					changeXY();
+					}
+				}
+			}
+	/*----------------------���Ӷ�------------------------------------------*/	
+			if(t+2<19&&t-2>=0) {
+				if(null!=cheesboard[i][t-1]&&
+						cheesboard[i][t-1]==cheesboard[i][t+1]&&
+						cheesboard[i][t-1]==cheesboard[i][t+2]&&
+						cheesboard[i][t-1]==cheesboard[i][t-2]) {
+					if(cheesboard[i][t-1]==nowCheese) {//��
+						temp = 4;
+						changeXY();
+					} else {
+						temp = 3;
+					changeXY();
+					}
+				}
+			}
+			if(i+2<19&&i-2>=0) {
+				if(null!=cheesboard[i+1][t]&&
+						cheesboard[i+1][t]==cheesboard[i+2][t]&&
+						cheesboard[i+1][t]==cheesboard[i-2][t]&&
+						cheesboard[i+1][t]==cheesboard[i-1][t]) {
+					if(cheesboard[i+1][t]==nowCheese) {//��
+						temp = 4;
+						changeXY();
+					} else {
+						temp = 3;
+					changeXY();
+					}
+				}
+			}
+			if(i-2>=0&&t-2>=0&&i+2<19&&t+2<19) {
+				if(null!=cheesboard[i-1][t-1]&&
+						cheesboard[i-1][t-1]==cheesboard[i-2][t-2]&&
+						cheesboard[i-1][t-1]==cheesboard[i+2][t+2]&&
+						cheesboard[i-1][t-1]==cheesboard[i+1][t+1]) {
+					if(cheesboard[i-1][t-1]==nowCheese) {//�I
+						temp = 4;
+						changeXY();
+					} else {
+						temp = 3;
+					changeXY();
+					}
+				}
+			}
+			if(i-2>=0&&t+2<19&&t-2>=0&&i+2<19) {
+				if(null!=cheesboard[i-1][t+1]&&
+						cheesboard[i-1][t+1]==cheesboard[i-2][t+2]&&
+						cheesboard[i-1][t+1]==cheesboard[i+2][t-2]&&
+						cheesboard[i-1][t+1]==cheesboard[i+1][t-1]) {
+					if(cheesboard[i-1][t+1]==nowCheese) {//�J
+						temp = 4;
+						changeXY();
+					} else {
+						temp = 3;
+					changeXY();
+					}
+				}
+			}
+		}
+	
+	
+		public int[] operate() {
+			temp = -99;
+			max = -99;
+			for(i=0;i<19;i++) {
+				for(t=0;t<19;t++) {
+					if(cheesboard[i][t]==null) {
+//						lookFor4(cheesboard,nowCheese);
+//						if(max<3){
+//							lookFor3(cheesboard,nowCheese);
+//						}else if(max<1) {
+//							lookFor2(cheesboard,nowCheese);
+//						}else if(max<-1) {
+//							lookFor1(cheesboard,nowCheese);
+//						}
+						lookFor1();
+						lookFor2();
+						lookFor3();
+						lookFor4();
+					}
+				}
+			}
+			return xy;
+		}
+		
+}
 
 }
 
@@ -495,13 +1323,13 @@ class ClientNet {
 	
 	//连接服务机
 	public void connect() throws Exception{
-		Client = new Socket(IP,port); //华宗汉电脑IP"192.168.43.155"
+		Client = new Socket(IP,port); 
 		if(Client.isConnected()) {
 			JOptionPane.showInputDialog("已连接","进入游戏");
 		}
 	}
 	
-	//获取对方下棋位置
+		//获取对方下棋位置
 		public int[] getEnemyAddress() throws IOException {
 			int[] num = new int[2];
 			DataIn = Client.getInputStream();
